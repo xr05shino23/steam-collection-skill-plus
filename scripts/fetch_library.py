@@ -5,15 +5,20 @@
   [本地] 注册表定位 Steam -> appmanifest_*.acf 扫描 -> 已安装集合 (唯一权威)
   [L1] Web API GetOwnedGames   需 key 且账号"游戏详情"公开
   [L2] 社区 games 页            匿名(详情公开)或 steamLoginSecure Cookie; 兼容 2025 改版
-  [--login] 浏览器登录          Playwright 弹出系统浏览器, 用户手动登录后自动提取 Cookie
+  [L3] 浏览器登录              --login: Playwright 弹出系统浏览器, 用户登录后自动提取 Cookie
+  [L5] 家庭共享库              --family(或 --login 自动): 登录态接口 IFamilyGroupsService
   [--licenses] 许可页审计       需 Cookie, 只出报告不进列表
 
 用法:
   python fetch_library.py                # L1 失败自动降级 L2
-  python fetch_library.py --login        # Cookie 缺失/过期时, 浏览器登录一次
+  python fetch_library.py --login        # 浏览器登录一次; 并自动纳入家庭共享库
+  python fetch_library.py --family       # 仅补抓家庭共享库(需已 --login 过)
   python fetch_library.py --licenses     # 额外许可页审计
   python fetch_library.py --offline      # 断网: 以上次结果为基准仅刷新安装状态
   python fetch_library.py --dry-run --no-proxy
+
+输出 CSV 列: appid,name,store_url,installed,source
+  source = own(自有) / shared(家庭共享); 未启用家庭库时恒为 own
 依赖: python3 + requests ; --login 另需 pip install playwright (浏览器用系统 Edge/Chrome)
 """
 import csv, json, os, re, shutil, sys, time
@@ -230,6 +235,89 @@ def fetch_licenses(cfg, no_proxy):
         if len(rows) > len(first): break
     return rows, (None if len(rows) > len(first) else "翻页失效, 仅第 1 页 %d 行" % len(rows))
 
+# ---------- 家庭共享库 (L5) ----------
+
+def _find_key(obj, key):
+    if isinstance(obj, dict):
+        if key in obj:
+            return obj[key]
+        for v in obj.values():
+            r = _find_key(v, key)
+            if r is not None:
+                return r
+    elif isinstance(obj, list):
+        for v in obj:
+            r = _find_key(v, key)
+            if r is not None:
+                return r
+    return None
+
+def fetch_family(cfg, no_proxy=False):
+    """[L5] 新版 Steam 家庭共享库: 从家庭管理页捕获登录态接口, 调用 IFamilyGroupsService。
+    需已生成浏览器登录态 (.browser_profile, 即先跑过 --login)。
+    返回 ({appid: name}, None) 或 (None, 原因)。含自己拥有的游戏(include_own=true)。"""
+    import urllib.parse as up
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return None, "缺少 playwright (pip install playwright)"
+    if not os.path.isdir(PROFILE):
+        return None, "无浏览器登录态(先跑 --login)"
+    raw, last = None, ""
+    with sync_playwright() as p:
+        ctx = None
+        for ch in ("msedge", "chrome"):
+            try:
+                ctx = p.chromium.launch_persistent_context(
+                    PROFILE, channel=ch, headless=True, viewport={"width": 1400, "height": 1000},
+                    proxy={"server": cfg["proxy"]} if (cfg["proxy"] and not no_proxy) else None)
+                break
+            except Exception as e:
+                last = str(e)
+        if ctx is None:
+            return None, "浏览器启动失败: %s" % last[:120]
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        try:
+            page.goto("https://store.steampowered.com/account/familymanagement",
+                      timeout=90000, wait_until="domcontentloaded")
+            page.wait_for_timeout(6000)
+            raw = page.evaluate("""() => performance.getEntriesByType('resource')
+                .map(e => e.name).find(u => u.includes('GetFamilyGroupForUser'))""")
+        except Exception as e:
+            try: ctx.close()
+            except Exception: pass
+            return None, "打开家庭管理页失败: %s" % e
+        try: ctx.close()
+        except Exception: pass
+    if not raw:
+        return None, "未捕获家庭接口(未加入家庭组, 或页面结构变化)"
+    qs = up.parse_qs(up.urlparse(raw).query)
+    token = qs.get("access_token", [None])[0]
+    ipe = qs.get("input_protobuf_encoded", [None])[0]
+    if not token:
+        return None, "未取得 access_token"
+    s = http(cfg, no_proxy)
+    base = "https://api.steampowered.com/IFamilyGroupsService/"
+    try:
+        p1 = {"access_token": token, "format": "json"}
+        if ipe: p1["input_protobuf_encoded"] = ipe
+        gid = _find_key(s.get(base + "GetFamilyGroupForUser/v1/", params=p1, timeout=30).json(), "family_groupid")
+        if not gid:
+            return None, "未取得 family_groupid"
+        p2 = {"access_token": token, "format": "json", "family_groupid": gid,
+              "include_own": "true", "include_excluded": "false", "include_free": "true",
+              "include_non_games": "true", "max_apps": "5000", "language": "schinese"}
+        j2 = s.get(base + "GetSharedLibraryApps/v1/", params=p2, timeout=60).json()
+    except Exception as e:
+        return None, "家庭接口请求失败: %s" % e
+    apps = j2.get("apps") or (j2.get("response") or {}).get("apps") or []
+    out = {}
+    for a in apps:
+        aid = str(a.get("appid") or a.get("app_id") or "")
+        if aid and aid != "0":
+            out[aid] = a.get("name", "")
+    return (out or None), (None if out else "家庭库为空")
+
 # ---------- 主流程 ----------
 
 def main():
@@ -266,16 +354,29 @@ def main():
                     sys.exit(3)
                 src = "社区页(登录会话)"
             print("所有权: %d 条 (来源: %s)" % (len(own), src))
-    extra = {a: n for a, n in inst.items() if a not in own and a not in NOISE}
-    rows = [{"appid": a, "name": own[a] or inst.get(a, ""),
+    # 家庭共享库: --family 显式开启, 或 --login 时自动(可用 --no-family 关闭)
+    fam = {}
+    if "--family" in sys.argv or ("--login" in sys.argv and "--no-family" not in sys.argv):
+        fam, fe = fetch_family(cfg, no_proxy)
+        if fam:
+            print("家庭共享库: %d 条 (其中非自有 %d)" % (len(fam), sum(1 for a in fam if a not in own)))
+        else:
+            print("家庭共享库: 跳过 (%s)" % fe)
+    allids = set(own) | set(fam)
+    extra = {a: n for a, n in inst.items() if a not in allids and a not in NOISE}
+    rows = [{"appid": a, "name": own.get(a) or fam.get(a) or inst.get(a, ""),
              "store_url": "https://store.steampowered.com/app/%s" % a,
-             "installed": "true" if a in inst else "false"} for a in sorted(own, key=int)]
+             "installed": "true" if a in inst else "false",
+             "source": "own" if a in own else "shared"} for a in sorted(allids, key=int)]
     oldmap = {r["appid"]: r for r in old}
     L = ["游戏列表刷新报告", "时间: %s" % time.strftime("%Y-%m-%d %H:%M:%S"), "来源: %s" % src,
-         "旧 %d -> 新 %d (已安装 %d)" % (len(old), len(rows), sum(1 for r in rows if r["installed"] == "true")), "",
+         "旧 %d -> 新 %d (自有 %d + 家庭共享 %d, 已安装 %d)" % (
+             len(old), len(rows), sum(1 for r in rows if r["source"] == "own"),
+             sum(1 for r in rows if r["source"] == "shared"),
+             sum(1 for r in rows if r["installed"] == "true")), "",
          "新增(%d):" % sum(1 for r in rows if r["appid"] not in oldmap),
-         "移除(%d):" % sum(1 for a in oldmap if a not in own),
-         "仅 manifest 无所有权(疑似家庭共享/免费周末残留, 未写入 %d):" % len(extra)]
+         "移除(%d):" % sum(1 for a in oldmap if a not in allids),
+         "仅 manifest 无所有权(疑似免费周末残留, 未写入 %d):" % len(extra)]
     L += ["  ~ %s %s" % (a, extra[a]) for a in sorted(extra, key=int)]
     print("\n".join(L))
     if dry: print("DRY-RUN: 未写入。"); return
@@ -286,7 +387,7 @@ def main():
         shutil.copy2(LIB, b); print("旧表备份:", b)
     t = LIB + ".tmp"
     with open(t, "w", encoding="utf-8-sig", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["appid", "name", "store_url", "installed"])
+        w = csv.DictWriter(f, fieldnames=["appid", "name", "store_url", "installed", "source"])
         w.writeheader(); w.writerows(rows)
     os.replace(t, LIB)
     open(DIFF, "w", encoding="utf-8").write("\n".join(L) + "\n")

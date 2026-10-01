@@ -39,8 +39,8 @@ description: 全自动把用户的 Steam 游戏库分类为 Steam 收藏集并�
    是否做**泛化类收紧**、**复核深度**（不查/只查可疑/全量/双遍交叉）、预算与并发。
    给出的选择将决定步骤 2/3 的行为。
 
-**CSV 格式约定**（UTF-8 with BOM，四列）：
-`appid,name,store_url,installed`，installed 为 `true`/`false`。
+**CSV 格式约定**（UTF-8 with BOM，五列）：
+`appid,name,store_url,installed,source`，installed 为 `true`/`false`，source 为 `own`/`shared`。
 
 **预提供文件的校验要点**：
 - 游戏列表：appid 唯一且为数字；installed 列存在；行数与用户描述的库规模量级一致
@@ -60,11 +60,14 @@ description: 全自动把用户的 Steam 游戏库分类为 Steam 收藏集并�
 | L1 Web API GetOwnedGames | API key + 账号"游戏详情"公开 | 最稳定，一次调用全量 |
 | L2 社区 games 页 | 匿名（详情公开）或 steamLoginSecure Cookie | 详情非公开时需 Cookie |
 | L3 浏览器控制登录 | 用户手动登录一次 | **推荐的凭据获取方式**：Playwright 弹出系统 Edge/Chrome，用户登录（支持 Steam Guard），自动提取 Cookie 存本地配置 |
+| **L5 家庭共享库** | 家庭管理页登录态 | **纳入家庭组共享的游戏**：`--login` 自动开启，或 `--family` 单独补抓；未加入家庭组时优雅跳过 |
 | L4 许可页审计 | Cookie | 可选：全集审计找漏项（只出报告不进列表） |
-| 本地 manifest 扫描 | 无 | 安装状态 + 家庭共享残留检测 |
+| 本地 manifest 扫描 | 无 | 安装状态 + 残留检测 |
 
 执行：`python scripts/fetch_library.py`（配置见 `scripts/local_config.template.json`）。
-产出 `steam_library.csv` + diff 报告。
+- 想**一次抓全**（自有 + 家庭共享）：`python scripts/fetch_library.py --login`
+  （登录后自动带上家庭库）；已登录过只需补家庭库时：`--family`。
+产出 `steam_library.csv`（含 `source=own/shared`）+ diff 报告。
 
 **汇报内容**：来源方法、总款数、已安装数、与用户预期的差异（如用户知道有某游戏但列表没有）。
 **等待确认**。
