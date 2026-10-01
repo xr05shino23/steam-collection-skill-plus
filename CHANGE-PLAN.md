@@ -4,6 +4,21 @@
 > 依据：2026-10-01 对 602 款真实库跑完全流程（跨两个会话窗口）的实战记录。
 > 目标：让用户在「分类精细度、维度、复核深度、成本」上有**明确的选择**，并让长会话可无损接续、分类质量可衡量。
 
+## 实现状态（2026-10-01）
+
+| 项 | 状态 | 落地 |
+|---|---|---|
+| P0 会话接续 | ✅ 已实现 | `references/handoff.md`、`scripts/handoff.py` |
+| P1 类型+属性双维度 | ✅ 已实现 | `categories-guide.md`（F 特性）、`build_collections.py` |
+| P1 类目体检 | ✅ 已实现 | `references/category-quality.md`、`scripts/overlap_check.py` |
+| P2 分类策略档位 | ✅ 已实现 | `references/options.md`、`SKILL.md` 步骤0 |
+| P2 复核质量 | ✅ 已实现 | `scripts/compare_passes.py`、`review_tools.py check`、`methods-review.md` |
+| P3 带权标签 | ✅ 已实现（文档+约定） | `methods-review.md` |
+| P3 文档/坑清单 | ✅ 已实现 | `pitfalls.md`（分类质量 + 会话工程） |
+| P2 厂商国别细分 | ✅ 已实现 | `references/vendor-region.md`、`scripts/vendor_region.py` |
+
+两个提交：`7c8ffc9`（厂商+接续+体检/属性）、`6bef8e4`（档位+复核质量+文档）。
+
 ---
 
 ## 0. 背景：本次实战暴露的问题（都带数据）
