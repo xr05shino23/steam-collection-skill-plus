@@ -34,6 +34,9 @@ description: 全自动把用户的 Steam 游戏库分类为 Steam 收藏集并�
 3. **环境与偏好**：本机是否装有 Steam 客户端（写入必需）；是否有代理及其地址；是否安装
    Python 3 + requests；步骤3 若跑全量复核，询问用户的时间/预算偏好与子代理并发限额
    （不确定则按默认策略运行中探测）。
+4. **分类策略档位**：按 `references/options.md` **一次问完**——精细度（1 主 / 1主+≤2次 / 不限）、
+   是否启用**属性维度 F**、是否做**泛化类收紧**、**复核深度**（不查/只查可疑/全量/双遍交叉）、
+   预算与并发。给出的选择将决定步骤 2/3 的行为。
 
 **CSV 格式约定**（UTF-8 with BOM，四列）：
 `appid,name,store_url,installed`，installed 为 `true`/`false`。
@@ -77,6 +80,9 @@ description: 全自动把用户的 Steam 游戏库分类为 Steam 收藏集并�
 - C 类型：玩法类型（视觉小说/RPG/策略/…），一款可多选
 - D 厂商：知名大厂单独成类，小厂/独立归入兜底类
 - E 其他：工具软件/音频/视频等非游戏
+- **D 厂商细化**：知名大厂（作品 ≥3 或全球知名）单独成类，其余进兜底类（如 D99）。
+  兜底类别急着收尾——用 `references/vendor-region.md` 的方法再细化：**联网判厂商国别**
+  （把中国厂商单列）＋**名厂逐个独立成类**，长尾才留在兜底。
 - **编号规范**：兜底类（"其他"）编号必须是大类内最大号（如 D99），保证排序永远最后；
   中间编号保持连续无空位
 
@@ -100,6 +106,11 @@ description: 全自动把用户的 Steam 游戏库分类为 Steam 收藏集并�
 
 **子代理数量按用户情况增减**（并发上限、预算、时间要求、服务商稳定性），探测方法与
 调度参数决策表见 `references/methods-review.md`。默认策略：先双发探测上限，被拒即回落。
+
+自定义类目/收紧口径时，先跑**类目体检**（`scripts/overlap_check.py`，见 `references/category-quality.md`），
+只对高重叠泛化类做「准入+排除+锚点」收紧，别全类目一刀切。
+追求高准确度时做**双遍交叉**：同批独立跑两遍 → `scripts/compare_passes.py` 比对 → 冲突三选一
+（用户拍板/第三遍/多数表决）。merge 前必跑 `review_tools.py check` 查覆盖率/漏行。
 
 复核后汇总为 `preclassification_reviewed.csv` + 变化报告。
 **汇报**：复核覆盖数、修正数、变化样例、实际使用的并发与批次参数。**等待确认**。
@@ -138,6 +149,8 @@ description: 全自动把用户的 Steam 游戏库分类为 Steam 收藏集并�
 - 一切写入类操作（覆盖用户文件、写 Steam）之前必须先备份并向用户确认
 - 网络抓取带重试与退避；失败时给出可操作的下一步提示而不是静默失败
 - 遇到本 skill 未覆盖的情况，查 `references/pitfalls.md` 的已知问题清单
+- **长会话防打转**：每个步骤收尾调用 `python scripts/handoff.py --write --note "..."` 更新 `HANDOFF.md`
+  （结构见 `references/handoff.md`）；**上下文接近上限、开始重复时**，先落盘再建议用户开新窗口接续
 
 ## 文件结构
 
@@ -152,6 +165,10 @@ steam-collection-skill/
     methods-review.md          步骤3 标签来源与子代理批处理协议
     write-guide.md             步骤4 云存储格式与写入协议
     incremental-guide.md       增量模式：新增游戏只分类新增部分
+    vendor-region.md           厂商兜底类细化：联网判国别 + 名厂独立成类
+    handoff.md                 会话接续：状态外置与 HANDOFF 协议
+    category-quality.md        类目体检：重叠矩阵 + 准入/排除 + 锚点
+    options.md                 分类策略档位（精细度/属性/收紧/复核深度/预算）
     pitfalls.md                实战踩坑清单（遇到异常先查这里）
   scripts/
     local_config.template.json 配置模板（使用前复制为 local_config.json 并填写）
@@ -159,5 +176,9 @@ steam-collection-skill/
     build_collections.py       步骤4 收藏集 JSON 生成
     write_steam.py             步骤4 写入（守卫/备份/原子写）
     review_tools.py            步骤3 批次切分/汇总/回写工具
+    vendor_region.py           厂商兜底类细化（prepare/merge/classify/split）
+    handoff.py                 生成/刷新 HANDOFF.md 骨架
+    overlap_check.py           类目体检：两两类目重叠矩阵
+    compare_passes.py          双遍复核比对：逐款找不一致
     incremental.py             增量模式 detect/fetch-info/prepare/merge/apply
 ```
