@@ -362,6 +362,13 @@ def main():
             print("家庭共享库: %d 条 (其中非自有 %d)" % (len(fam), sum(1 for a in fam if a not in own)))
         else:
             print("家庭共享库: 跳过 (%s)" % fe)
+    # 许可页审计(可选, 只出报告不进列表)
+    lic, lerr = [], None
+    if "--licenses" in sys.argv:
+        lic, lerr = fetch_licenses(cfg, no_proxy)
+        lic = lic or []
+        if lic: print("许可页审计: %d 条 (只报告, 不进列表)" % len(lic))
+        else: print("许可页审计: 跳过 (%s)" % lerr)
     allids = set(own) | set(fam)
     extra = {a: n for a, n in inst.items() if a not in allids and a not in NOISE}
     rows = [{"appid": a, "name": own.get(a) or fam.get(a) or inst.get(a, ""),
@@ -378,6 +385,8 @@ def main():
          "移除(%d):" % sum(1 for a in oldmap if a not in allids),
          "仅 manifest 无所有权(疑似免费周末残留, 未写入 %d):" % len(extra)]
     L += ["  ~ %s %s" % (a, extra[a]) for a in sorted(extra, key=int)]
+    if "--licenses" in sys.argv:
+        L.append("许可页审计(只报告, 不进列表): %d 条%s" % (len(lic), "" if not lerr else " | " + lerr))
     print("\n".join(L))
     if dry: print("DRY-RUN: 未写入。"); return
     os.makedirs(OUT_DIR, exist_ok=True)
