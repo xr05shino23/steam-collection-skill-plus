@@ -12,7 +12,7 @@
 | 许可和产品序列号激活页 | `store.steampowered.com/account/licenses/` | Cookie | 全部许可（含 CD-Key/订阅）+ 激活日期 | 无 appid，按名称比对做审计；页面 AJAX 翻页 |
 | **家庭共享库 (L5)** | `api.steampowered.com/IFamilyGroupsService/GetSharedLibraryApps/v1/` | 家庭管理页登录态 `access_token`(JWT) | 家庭组全部可玩游戏（含自己的） | 见下节；需先登录；返回 protobuf，需 `format=json` |
 | 本地 appmanifest | `<steam_root>/steamapps/libraryfolders.vdf` 列出所有库 → 各库 `appmanifest_*.acf` | 无 | **安装状态（唯一权威）** | Steam 根目录读注册表 `HKCU\Software\Valve\Steam\SteamPath` |
-| SteamDB / 商店页 | steambd.net / `store.steampowered.com/app/<id>` | 无 | 单款信息补充 | 用于核对，不宜全库抓 |
+| SteamDB / 商店页 | steamdb.info / `store.steampowered.com/app/<id>` | 无 | 单款信息补充 | 用于核对，不宜全库抓 |
 
 **steamLoginSecure Cookie 获取方式**（三选一）：
 1. 浏览器控制自动提取（见下节，推荐）
