@@ -1,5 +1,35 @@
 # 更新日志
 
+## v1.2.0 (2026-10-01)
+
+增强版（fork）。在 v1.1.0 基础上增强「分类质量与灵活性」，新增家庭共享抓取，并修复写入相关 bug。
+
+### 新增
+- **家庭共享库抓取（L5）**：`fetch_library.py` 支持 `--family`（`--login` 时自动），
+  经登录态接口 `IFamilyGroupsService` 纳入家庭组共享游戏；输出 CSV 增加 `source` 列（own/shared）。
+- **类目体检**：`overlap_check.py` 计算同一维度内两两类目的 Jaccard 重叠并告警；
+  新增 `references/category-quality.md`（何时收紧 + 准入/排除/锚点方法与成效）。
+- **分类策略档位**：`references/options.md`（精细度 / 属性维度 / 属性类目归位 / 泛化类收紧 / 复核深度 / 预算）。
+- **类型 + 属性双维度**：新增 F 特性维度（`build_collections.py` 支持 `F -> F_tags`）。
+- **厂商维度细化**：`vendor_region.py` + `references/vendor-region.md`——联网判厂商国别
+  （中国厂商单列）、名厂逐个独立成类，兜底类不再是大杂烩。
+- **会话接续**：`handoff.py` + `references/handoff.md`，状态外置，长任务换窗口可续。
+- **复核质量**：`compare_passes.py`（双遍独立复核逐款比对）；`review_tools.py check`（覆盖率/漏行校验）。
+- **总表生成**：`gen_report.py`（人类可读分类总表）。
+
+### 修复
+- `write_steam.py`：userdata 目录名改用 **SteamID32**（原用 SteamID64 导致找不到目标文件、无法写入）；
+  并**保护系统收藏集** `favorite`/`hidden`（原会误删）。
+- `fetch_library.py`：`--licenses` 未接线（补调用 + 空值保护）。
+- `gen_report.py`：去掉硬编码绝对路径。
+- 文档域名笔误等。
+
+### 文档
+- `README.md` 重写为完整项目介绍；`pitfalls.md` 增补「分类质量」与「会话工程」实战经验。
+
+### 致谢
+基于 **Smirk1921/steam-collection-skill**（MIT），保留原作者版权声明。
+
 ## v1.1.0 (2026-09-29)
 
 增量模式：已完成分类后，库里新增游戏只分类新增部分，不再重跑全流程。
