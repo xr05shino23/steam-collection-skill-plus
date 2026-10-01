@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import csv, json, os
-ROOT = r"E:\ai整理steam库\steam-collection-skill"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 S = os.path.join(ROOT, "step2")
 rows = list(csv.DictReader(open(os.path.join(S, "preclassification.csv"), encoding="utf-8-sig")))
 defs = json.load(open(os.path.join(S, "categories.json"), encoding="utf-8"))
