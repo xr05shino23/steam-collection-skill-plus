@@ -38,7 +38,7 @@ def main():
     rows = list(csv.DictReader(open(table, encoding="utf-8-sig")))
     defs = json.load(open(defs_f, encoding="utf-8"))
     by_appid = {r["appid"]: r for r in rows}
-    FIELD = {"A": "A_status", "B": "B_series", "C": "C_types", "D": "D_vendors", "E": "E_other"}
+    FIELD = {"A": "A_status", "B": "B_series", "C": "C_types", "D": "D_vendors", "E": "E_other", "F": "F_tags"}
     order = [d["code"] for d in defs]
     # 兜底类 (编码数字为 99 结尾) 强制排各大类最后
     order.sort(key=lambda c: (c[0], 1 if c[1:].startswith("99") else 0, c))

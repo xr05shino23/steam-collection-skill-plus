@@ -18,3 +18,6 @@ __pycache__/
 # 增量模式产物与缓存
 step5/
 data/
+
+# 个人交接文档 (含 SteamID / 本机路径)
+HANDOFF.md
