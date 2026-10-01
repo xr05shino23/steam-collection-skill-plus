@@ -28,7 +28,11 @@ def target_path(c):
             k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam")
             root = winreg.QueryValueEx(k, "SteamPath")[0]
         except Exception: pass
-    sid = str(c.get("steamid64") or (76561197960265728 + int(c["steamid32"])))
+    # userdata 目录名是 SteamID32；缺 steamid32 时由 steamid64 换算
+    if c.get("steamid32"):
+        sid = str(c["steamid32"])
+    else:
+        sid = str(int(c["steamid64"]) - 76561197960265728)
     assert root and sid, "缺少 steam_root 与 steamid32/steamid64 配置"
     return os.path.join(root, "userdata", sid, "config", "cloudstorage",
                         "cloud-storage-namespace-1.json")
@@ -69,14 +73,24 @@ def main():
     if not isinstance(orig, list):
         print("REFUSE: 目标文件结构不是数组"); sys.exit(4)
     new = json.load(open(NEW, encoding="utf-8"))
-    keep = [e for e in orig if not (isinstance(e, list) and e and str(e[0]).startswith("user-collections"))]
-    removed = len(orig) - len(keep)
+    # 保护 Steam 内置收藏集（收藏夹/已隐藏），其余 user-collections.* 才移除
+    protect = {"user-collections.favorite", "user-collections.hidden"}
+
+    def is_removable(e):
+        return (isinstance(e, list) and e and str(e[0]).startswith("user-collections")
+                and str(e[0]) not in protect)
+
+    removed = [str(e[0]) for e in orig if is_removable(e)]
+    keep = [e for e in orig if not is_removable(e)]
     merged = keep + new
     keys = [e[0] for e in merged if isinstance(e, list) and e]
     assert len(keys) == len(set(keys)), "存在重复 key, 中止"
     blob = json.dumps(merged, ensure_ascii=False, separators=(",", ":"))
     json.loads(blob)
-    print("原有 %d 条, 移除旧收藏集 %d 个, 新增 %d 个, 合并后 %d 条" % (len(orig), removed, len(new), len(merged)))
+    print("原有 %d 条, 移除旧收藏集 %d 个, 保留系统收藏集, 新增 %d 个, 合并后 %d 条"
+          % (len(orig), len(removed), len(new), len(merged)))
+    if removed:
+        print("将移除:", removed)
     if dry: print("DRY-RUN: 未写入。"); return
     ts = time.strftime("%Y%m%d_%H%M%S")
     os.makedirs(BACKUP_DIR, exist_ok=True)
