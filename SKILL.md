@@ -34,6 +34,9 @@ description: 全自动把用户的 Steam 游戏库分类为 Steam 收藏集并�
 3. **环境与偏好**：本机是否装有 Steam 客户端（写入必需）；是否有代理及其地址；是否安装
    Python 3 + requests；步骤3 若跑全量复核，询问用户的时间/预算偏好与子代理并发限额
    （不确定则按默认策略运行中探测）。
+4. **分类策略档位**：按 `references/options.md` **一次问完**——精细度（1 主 / 1主+≤2次 / 不限）、
+   是否启用**属性维度 F**、是否做**泛化类收紧**、**复核深度**（不查/只查可疑/全量/双遍交叉）、
+   预算与并发。给出的选择将决定步骤 2/3 的行为。
 
 **CSV 格式约定**（UTF-8 with BOM，四列）：
 `appid,name,store_url,installed`，installed 为 `true`/`false`。
@@ -104,6 +107,11 @@ description: 全自动把用户的 Steam 游戏库分类为 Steam 收藏集并�
 **子代理数量按用户情况增减**（并发上限、预算、时间要求、服务商稳定性），探测方法与
 调度参数决策表见 `references/methods-review.md`。默认策略：先双发探测上限，被拒即回落。
 
+自定义类目/收紧口径时，先跑**类目体检**（`scripts/overlap_check.py`，见 `references/category-quality.md`），
+只对高重叠泛化类做「准入+排除+锚点」收紧，别全类目一刀切。
+追求高准确度时做**双遍交叉**：同批独立跑两遍 → `scripts/compare_passes.py` 比对 → 冲突三选一
+（用户拍板/第三遍/多数表决）。merge 前必跑 `review_tools.py check` 查覆盖率/漏行。
+
 复核后汇总为 `preclassification_reviewed.csv` + 变化报告。
 **汇报**：复核覆盖数、修正数、变化样例、实际使用的并发与批次参数。**等待确认**。
 
@@ -160,6 +168,7 @@ steam-collection-skill/
     vendor-region.md           厂商兜底类细化：联网判国别 + 名厂独立成类
     handoff.md                 会话接续：状态外置与 HANDOFF 协议
     category-quality.md        类目体检：重叠矩阵 + 准入/排除 + 锚点
+    options.md                 分类策略档位（精细度/属性/收紧/复核深度/预算）
     pitfalls.md                实战踩坑清单（遇到异常先查这里）
   scripts/
     local_config.template.json 配置模板（使用前复制为 local_config.json 并填写）
@@ -170,5 +179,6 @@ steam-collection-skill/
     vendor_region.py           厂商兜底类细化（prepare/merge/classify/split）
     handoff.py                 生成/刷新 HANDOFF.md 骨架
     overlap_check.py           类目体检：两两类目重叠矩阵
+    compare_passes.py          双遍复核比对：逐款找不一致
     incremental.py             增量模式 detect/fetch-info/prepare/merge/apply
 ```

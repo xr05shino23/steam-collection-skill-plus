@@ -9,6 +9,8 @@
          (自动做结果文件格式校验修复: 竖线分隔/漏空列/值前缀/依据逗号)
   python review_tools.py apply    [--reviewed step3/preclassification_reviewed.csv] [--dry-run]
       -> 回写 step2/preclassification.csv (先备份)
+  python review_tools.py check    [--batches step3/batches] [--results step3/results]
+      -> 校验批次与结果的覆盖率/漏行/未知键 (merge 前必跑)
 子代理协议见 references/methods-review.md。
 """
 import csv, json, os, re, shutil, sys, time
@@ -166,7 +168,51 @@ def cmd_apply():
     print("%s已回写 %s (确定 %d)" % ("[DRY] " if dry else "", dst, len(pre)))
     print("下一步: build_collections.py -> 写前确认 -> write_steam.py")
 
+def _arg(flag, default=None):
+    return sys.argv[sys.argv.index(flag) + 1] if flag in sys.argv else default
+
+
+def cmd_check():
+    """校验批次与结果文件的覆盖率/漏行/未知键（merge 前必跑）。"""
+    bdir = _arg("--batches", os.path.join(STEP3, "batches"))
+    rdir = _arg("--results", os.path.join(STEP3, "results"))
+    table = table_path()
+    known = None
+    if table and os.path.exists(table):
+        known = {r["appid"] for r in read_csv(table)}
+    batches = sorted(re.findall(r"batch_(\d+)\.txt", " ".join(os.listdir(bdir)))) if os.path.isdir(bdir) else []
+    total_missing = total_extra = total_bad = 0
+    for num in batches:
+        bf = os.path.join(bdir, "batch_%s.txt" % num)
+        rf = os.path.join(rdir, "batch_%s.csv" % num)
+        bkeys = []
+        for line in open(bf, encoding="utf-8-sig"):
+            line = line.strip()
+            if line:
+                bkeys.append(line.split("|")[0].strip())
+        rkeys, bad = [], 0
+        if os.path.exists(rf):
+            for line in open(rf, encoding="utf-8-sig").read().splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                p = next(csv.reader([line]))
+                if not p or not p[0].strip():
+                    bad += 1; continue
+                rkeys.append(p[0].strip())
+        missing = [k for k in bkeys if k not in rkeys]
+        extra = [k for k in rkeys if k not in bkeys or (known and k not in known)]
+        total_missing += len(missing); total_extra += len(extra); total_bad += bad
+        if missing or extra or bad:
+            print("batch_%s: 批 %d / 果 %d | 缺 %d %s | 多/未知 %d %s | 异常行 %d" % (
+                num, len(bkeys), len(rkeys), len(missing), missing[:6], len(extra), extra[:6], bad))
+    print("校验完成：批次 %d | 缺失合计 %d | 多/未知合计 %d | 异常行合计 %d" % (
+        len(batches), total_missing, total_extra, total_bad))
+    if total_missing or total_extra or total_bad:
+        print("→ 有缺口：重派对应批（幂等续跑）后再 merge。")
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
-    {"prepare": cmd_prepare, "merge": cmd_merge, "apply": cmd_apply}.get(cmd,
-        lambda: print("用法: python review_tools.py prepare|merge|apply ..."))()
+    {"prepare": cmd_prepare, "merge": cmd_merge, "apply": cmd_apply, "check": cmd_check}.get(cmd,
+        lambda: print("用法: python review_tools.py prepare|merge|apply|check ..."))()
