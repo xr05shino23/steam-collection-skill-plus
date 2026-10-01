@@ -19,5 +19,5 @@ __pycache__/
 step5/
 data/
 
-# 个人交接文档 (含 SteamID / 本机路径)
-HANDOFF.md
+# 个人交接文档 (含 SteamID / 本机路径；只忽略根目录，勿误伤 references/handoff.md)
+/HANDOFF.md
