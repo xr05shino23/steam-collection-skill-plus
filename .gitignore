@@ -21,3 +21,6 @@ data/
 
 # 个人交接文档 (含 SteamID / 本机路径；只忽略根目录，勿误伤 references/handoff.md)
 /HANDOFF.md
+
+# 跨设备交接包 (含 SteamID / 游戏库，勿提交)
+/_transfer/
