@@ -24,3 +24,4 @@ data/
 
 # 跨设备交接包 (含 SteamID / 游戏库，勿提交)
 /_transfer/
+/_transfer.zip
